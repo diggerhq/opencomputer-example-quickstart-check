@@ -22,7 +22,7 @@ Create a file named `quickstart.mjs`:
 import { ParcelDesk } from "@parceldesk/sdk";
 
 const client = new ParcelDesk({ workspace: "demo" });
-const orders = await client.orders.list({ limit: 2 });
+const { items: orders } = await client.orders.list({ limit: 2 });
 
 console.log(
   orders

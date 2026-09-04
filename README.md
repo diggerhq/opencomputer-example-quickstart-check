@@ -1,28 +1,29 @@
 # Quickstart check
 
-An OpenComputer Serverless Agent that checks an SDK's getting-started guide
-every weekday morning. It installs the released SDK in a fresh project,
-executes the guide, and opens a verified documentation fix when the instructions
-fail. Subsequent runs find the existing fix PR instead of opening duplicates.
+An [OpenComputer](https://docs.opencomputer.dev/agents/schedules) agent that
+runs an SDK quickstart every weekday and opens a PR when the instructions
+need fixing.
 
-## The problem
+The fixture is a small fictional SDK, ParcelDesk. Its v2 release returns
+`{ items, nextCursor }` from `orders.list()`, but the
+[quickstart](docs/quickstart.md) still calls `.map()` on the response. Following
+the guide with the released package fails with `TypeError: orders.map is not
+a function`.
 
-A quickstart can stop working after an SDK release even when nobody changes
-the documentation. This agent is responsible for trying the onboarding steps
-regularly and producing a concrete fix when they drift.
+The agent reproduced that failure, inspected the installed SDK, and opened
+[PR #1](https://github.com/diggerhq/opencomputer-example-quickstart-check/pull/1)
+with a one-line correction and passing test output. A later scheduled run
+found the open PR and stopped. The broken guide is kept on `main` so you can
+reproduce both sides.
 
-This repository includes a fictional **ParcelDesk** SDK and its quickstart.
-The SDK release works, but the quickstart on `main` deliberately contains an
-outdated assumption. The agent discovers the mismatch by running the example
-and inspecting the installed package. No real customer data or API key is
-needed by the fixture.
+## Schedule
 
-## A schedule is part of the deployment
-
-The agent's schedule lives in
-[`opencomputer/agents/quickstart-check/schedules/morning-check.ts`](opencomputer/agents/quickstart-check/schedules/morning-check.ts):
+[`morning-check.ts`](opencomputer/agents/quickstart-check/schedules/morning-check.ts)
+registers the job when you deploy:
 
 ```ts
+import { defineSchedule } from "@opencomputer/agent";
+
 export default defineSchedule({
   id: "morning-check",
   cron: "0 9 * * 1-5",
@@ -30,7 +31,7 @@ export default defineSchedule({
   enabled: ["production"],
   overlap: "skip",
   dispatch: {
-    text: "Check that the published ParcelDesk quickstart works.",
+    text: "Follow our published SDK quickstart in a clean project. If it fails, propose a verified documentation fix.",
     payload: {
       mode: "quickstart-check",
       repository: "diggerhq/opencomputer-example-quickstart-check",
@@ -41,88 +42,72 @@ export default defineSchedule({
 });
 ```
 
-Deploying registers the schedule along with the agent. OpenComputer keeps the
-timer outside the agent's computer, then starts a fresh session for each run.
-The agent receives the dispatch plus the intended time and run ID. The
-schedule skips an occurrence if a previous run is still active.
+OpenComputer keeps the timer outside the agent's VM. Each occurrence starts a
+fresh session with this input and the schedule's run ID and intended time.
+`overlap: "skip"` prevents a new run while the previous one is active. Changes
+to the schedule take effect on redeploy.
 
-Development exposes **Run now** by default. To test actual recurrence, opt
-Development into the schedule explicitly. Each run has a new conversation and
-workspace; GitHub's open PRs provide the cross-run record for duplicate checks.
+[`agent.ts`](opencomputer/agents/quickstart-check/agent.ts) selects the coding
+harness's shell and filesystem tools, plus two GitHub tools. The agent clones
+the repository, runs the guide, investigates any failure, edits the Markdown,
+and runs it again before proposing a fix. Installation failures are reported
+without a documentation change.
 
-## What the agent does
+[`verify-quickstart.mjs`](scripts/verify-quickstart.mjs) creates an empty
+project, installs the release URL from the guide, executes its JavaScript
+block, and compares stdout with its expected output. The model supplies the
+diagnosis and edit; the script just runs the example and checks the result.
 
-1. Check for an existing open quickstart fix PR.
-2. Clone the repository and read the published quickstart.
-3. Install the release tarball referenced by that guide in a clean project.
-4. Run the guide's actual JavaScript and compare its output with the documented
-   result.
-5. If it fails, inspect the installed SDK, make a focused change to the guide,
-   and rerun the corrected instructions in another clean project.
-6. Open a PR changing only `docs/quickstart.md`, with the observed error and
-   successful verification. Healthy runs and already-reported failures produce
-   no new PR.
+The [GitHub tools](opencomputer/agents/quickstart-check/tools/github.ts) use a
+managed connection scoped to the repository. The token stays outside the VM.
+The publishing tool writes only `docs/quickstart.md` and checks for an existing
+PR on `fix/quickstart` before creating one. That check uses GitHub, since
+scheduled sessions share neither conversation history nor files.
 
-The model does the diagnosis and edit. The verification script extracts the
-actual example from Markdown; it contains no replacement snippet or fix.
-GitHub writes use a managed connection scoped to this repository. The agent's
-computer never receives the GitHub token.
+## Run it
 
-## Observed result
-
-An automatic Development run opened
-[PR #1](https://github.com/diggerhq/opencomputer-example-quickstart-check/pull/1)
-after reproducing the failure against the
-[published SDK release](https://github.com/diggerhq/opencomputer-example-quickstart-check/releases/tag/sdk-v2.0.0).
-The agent inspected the installed package, corrected one line, and verified
-the guide's expected output in a fresh project. The PR's
-[quickstart check passed](https://github.com/diggerhq/opencomputer-example-quickstart-check/actions/runs/33925479531).
-The original guide remains on `main` so the failure stays reproducible.
-
-A following automatic run started a fresh session, found that same PR, and
-completed without creating another. The interval that overlapped the first
-run was skipped. Development recurrence was disabled after validation;
-**Run now** remains available. The recording instructions below enable a short
-Development schedule again when needed.
-
-## Run the example
-
-Requires Node 22+, an OpenComputer account, and a GitHub repository you own.
+You need Node 22+, an OpenComputer account, and a fork of this repository.
 
 ```sh
-git clone https://github.com/diggerhq/opencomputer-example-quickstart-check.git
+git clone https://github.com/YOUR-ACCOUNT/opencomputer-example-quickstart-check.git
 cd opencomputer-example-quickstart-check
 npm ci
+npm run verify:quickstart
+```
+
+The last command should fail with the TypeError above. It installs the
+[SDK release tarball](https://github.com/diggerhq/opencomputer-example-quickstart-check/releases/tag/sdk-v2.0.0)
+from GitHub; the fixture is not published to npm and needs no service account.
+The same command passes on the agent's fix PR.
+
+Replace `diggerhq/opencomputer-example-quickstart-check` with your fork's
+`owner/repo` throughout `opencomputer/`, then commit and push those changes.
+This sets the clone target, GitHub tools, connection scope, and schedule input.
+Keep the trailing slash in the connection's `pathPrefix`. Leave the release
+URL in the guide pointing to this repository unless you publish your own SDK
+release.
+
+Create a fine-grained GitHub token with Contents and Pull requests read/write
+on your fork, then deploy:
+
+```sh
 npm run typecheck
 npm test
 npm run doctor
-```
-
-To propose fixes to your own fork, change the repository in `agent.ts`, the
-`repository` constant in `tools/github-api.ts`, the connection `pathPrefix` in
-`tools/github.ts`, and the schedule payload. Keep the connection's path prefix
-exact, including its trailing slash. The fixture release URL can remain pointed
-at this repository, or you can publish the SDK in your own fork.
-
-```sh
 npx opencomputer login
 npx opencomputer link --create-project quickstart-check
-npm run deploy
 npx opencomputer secrets set GITHUB_TOKEN --environment development \
   --allow-origin https://api.github.com --value-stdin < /path/to/github-token
+npm run deploy
 ```
 
-Use a fine-grained token with Contents and Pull requests read/write on the
-target repository. Store the token outside this checkout. Do not include it
-in a schedule, prompt, or shell command argument.
+`npm run deploy` targets Development. The schedule is manual there by default;
+open **Development → Schedules → Run now** and follow the linked session.
+It should open a fix PR with the failing and passing output. Run it again and
+it should return that same PR.
 
-Open the project's **Development → Schedules** view and choose **Run now**.
-Follow the linked session through reproduction, diagnosis, verification, and
-the resulting PR. Run it again to observe the existing-PR check.
-
-The current CLI does not expose schedule operations. This repository includes
-a small Development-only helper using the public API and your existing CLI
-login:
+You can also use the included helper, which uses your saved CLI login and
+targets Development:
 
 ```sh
 node scripts/schedules.mjs list
@@ -130,71 +115,52 @@ node scripts/schedules.mjs run
 node scripts/schedules.mjs runs
 ```
 
-## Record an automatic run
+## Run on a timer
 
-For a short recording, change the schedule to:
+For a short test or recording, change two fields in `morning-check.ts`:
 
 ```ts
 cron: "*/2 * * * *",
 enabled: ["development"],
 ```
 
-Run `npm run deploy` to deploy to Development again. Show the next run in Schedules, let the scheduled
-time arrive, and follow the new session. The run history distinguishes an
-automatic occurrence from **Run now**. Record one subsequent occurrence to
-show that it finds the existing PR.
+Run `npm run deploy`. The Schedules view shows the next occurrence and links
+each run to its session. An existing fix PR will make the agent stop early;
+use a fresh fork to record the full investigation. To repeat it in the same
+fork, close the previous PR and delete `fix/quickstart` first—the tool will
+never overwrite that branch.
 
-After recording, restore the weekday schedule and `enabled: ["production"]`,
-then run `npm run deploy` **to Development**. This makes Development manual-only again;
-it does not deploy or enable anything in Production.
+When finished, restore the weekday cron and `enabled: ["production"]`, then
+run `npm run deploy` again. Development returns to manual-only. This command
+does not deploy to Production.
 
-For a repeatable recording, use a fresh fork or deliberately reset your own
-demonstration's fix branch and PR. Never merge the fix into this repository's
-demonstration base merely to reset a run.
+The original example's Development deployment is currently manual-only.
+[DX-NOTES.md](DX-NOTES.md) records the automatic runs and overlap skip.
 
-## Verify the fixture independently
+## Working on the example
 
-The strict check installs the published release and runs the guide. It should
-fail on the deliberately stale demonstration base and pass on the agent's fix:
+`npm test` covers the SDK contract and GitHub tools. It passes on both the
+deliberately broken guide and a correct fix. `npm run verify:quickstart` is the
+strict check: it must fail on the original guide and pass on the corrected
+one. PRs changing the guide run both checks in CI.
 
-```sh
-npm run verify:quickstart
-```
-
-For local SDK development, package and install the local tarball explicitly:
+To test changes to the SDK without publishing a release:
 
 ```sh
 npm run package:sdk
 npm run verify:quickstart -- --package artifacts/parceldesk-sdk-2.0.0.tgz
 ```
 
-`npm test` checks the SDK contract, the historical failure, and tool behavior.
-It stays green on both the demonstration base and the corrected guide. Fix
-PRs additionally run the strict check in GitHub Actions against the release.
+The package script creates the tarball attached to the `sdk-v2.0.0` GitHub
+release. Scheduled runs always use the guide's release URL.
 
-The SDK release is built with `npm run package:sdk` and attached to the
-`sdk-v2.0.0` GitHub release. It is a real installable package, distributed as a
-GitHub release asset rather than published to the npm registry.
+Use the repository's `deploy` and `doctor` scripts. They remove generated
+runtime files before invoking CLI 0.6.7, which otherwise scans its own build
+output as source. Project bindings and credentials are left alone.
 
-## Limits
-
-- The example reads a public repository and currently checks one guide, one
-  SDK release, and one expected output. It is not a general documentation crawler.
-- Schedule history records dispatch outcomes. `enacted` means the turn was
-  queued; the linked session shows whether the check actually succeeded.
-- Failed runs are inspectable but are not automatically retried by the scheduler.
-- A fresh scheduled session does not resume the previous run's files or history.
-- The example reserves `fix/quickstart` for its single outstanding correction.
-  It never overwrites an existing branch. After closing or merging a fix,
-  remove that branch explicitly before demonstrating another new correction.
-- The fixture deliberately models documentation drift. Real-world installation
-  outages should be reported as outages, not "fixed" by rewriting the guide.
-- Use the provided `npm run deploy` and `npm run doctor` commands. They clear
-  generated build output first to work around the current CLI's repeated-build
-  scanning issue; project bindings and credentials are preserved.
-
-[`DX-NOTES.md`](DX-NOTES.md) records the observed live runs and any product gaps.
-See the OpenComputer [schedules guide](https://docs.opencomputer.dev/agents/schedules)
-for the authoring contract.
+Schedule history reports dispatch status: `enacted` means a turn was queued.
+Read the session for the check's actual outcome. Failed runs are not retried
+automatically. See [DX-NOTES.md](DX-NOTES.md) for the live verification and
+remaining platform issues.
 
 MIT.

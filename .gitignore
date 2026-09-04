@@ -1,0 +1,9 @@
+node_modules/
+.opencomputer/
+.env
+.env.*
+!.env.example
+artifacts/
+dist/
+*.tgz
+.DS_Store

@@ -1,0 +1,24 @@
+{
+  "name": "opencomputer-example-quickstart-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.*",
+    "doctor": "opencomputer doctor",
+    "package:sdk": "node scripts/package-sdk.mjs",
+    "verify:quickstart": "node scripts/verify-quickstart.mjs",
+    "deploy": "opencomputer deploy --alias development --watch"
+  },
+  "dependencies": {
+    "@opencomputer/agent": "0.5.2"
+  },
+  "devDependencies": {
+    "@opencomputer/cli": "0.6.7",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": { "node": ">=22.0.0" }
+}

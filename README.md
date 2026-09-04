@@ -68,6 +68,23 @@ actual example from Markdown; it contains no replacement snippet or fix.
 GitHub writes use a managed connection scoped to this repository. The agent's
 computer never receives the GitHub token.
 
+## Observed result
+
+An automatic Development run opened
+[PR #1](https://github.com/diggerhq/opencomputer-example-quickstart-check/pull/1)
+after reproducing the failure against the
+[published SDK release](https://github.com/diggerhq/opencomputer-example-quickstart-check/releases/tag/sdk-v2.0.0).
+The agent inspected the installed package, corrected one line, and verified
+the guide's expected output in a fresh project. The PR's
+[quickstart check passed](https://github.com/diggerhq/opencomputer-example-quickstart-check/actions/runs/33925479531).
+The original guide remains on `main` so the failure stays reproducible.
+
+A following automatic run started a fresh session, found that same PR, and
+completed without creating another. The interval that overlapped the first
+run was skipped. Development recurrence was disabled after validation;
+**Run now** remains available. The recording instructions below enable a short
+Development schedule again when needed.
+
 ## Run the example
 
 Requires Node 22+, an OpenComputer account, and a GitHub repository you own.
@@ -90,7 +107,7 @@ at this repository, or you can publish the SDK in your own fork.
 ```sh
 npx opencomputer login
 npx opencomputer link --create-project quickstart-check
-npx opencomputer deploy --alias development
+npm run deploy
 npx opencomputer secrets set GITHUB_TOKEN --environment development \
   --allow-origin https://api.github.com --value-stdin < /path/to/github-token
 ```
@@ -122,13 +139,13 @@ cron: "*/2 * * * *",
 enabled: ["development"],
 ```
 
-Deploy to Development again. Show the next run in Schedules, let the scheduled
+Run `npm run deploy` to deploy to Development again. Show the next run in Schedules, let the scheduled
 time arrive, and follow the new session. The run history distinguishes an
 automatic occurrence from **Run now**. Record one subsequent occurrence to
 show that it finds the existing PR.
 
 After recording, restore the weekday schedule and `enabled: ["production"]`,
-then redeploy **to Development**. This makes Development manual-only again;
+then run `npm run deploy` **to Development**. This makes Development manual-only again;
 it does not deploy or enable anything in Production.
 
 For a repeatable recording, use a fresh fork or deliberately reset your own
@@ -172,6 +189,9 @@ GitHub release asset rather than published to the npm registry.
   remove that branch explicitly before demonstrating another new correction.
 - The fixture deliberately models documentation drift. Real-world installation
   outages should be reported as outages, not "fixed" by rewriting the guide.
+- Use the provided `npm run deploy` and `npm run doctor` commands. They clear
+  generated build output first to work around the current CLI's repeated-build
+  scanning issue; project bindings and credentials are preserved.
 
 [`DX-NOTES.md`](DX-NOTES.md) records the observed live runs and any product gaps.
 See the OpenComputer [schedules guide](https://docs.opencomputer.dev/agents/schedules)

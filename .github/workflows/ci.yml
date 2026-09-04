@@ -7,6 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -17,6 +19,17 @@ jobs:
       - run: npm run doctor
       # The demonstration base deliberately contains stale instructions.
       # Any PR changing the guide must make the real released quickstart pass.
-      - name: Verify corrected quickstart
+      - name: Detect a guide change
         if: github.event_name == 'pull_request'
+        id: guide
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed_paths=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- docs/quickstart.md)
+          if [ -n "$changed_paths" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Verify corrected quickstart
+        if: github.event_name == 'pull_request' && steps.guide.outputs.changed == 'true'
         run: npm run verify:quickstart

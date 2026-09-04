@@ -6,10 +6,12 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.*",
+    "predoctor": "node scripts/clean-generated.mjs",
     "doctor": "opencomputer doctor",
     "package:sdk": "node scripts/package-sdk.mjs",
     "verify:quickstart": "node scripts/verify-quickstart.mjs",
-    "deploy": "opencomputer deploy --alias development --watch"
+    "predeploy": "node scripts/clean-generated.mjs",
+    "deploy": "opencomputer deploy --alias development"
   },
   "dependencies": {
     "@opencomputer/agent": "0.5.2"

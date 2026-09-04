@@ -108,7 +108,9 @@ test("the actual quickstart is runnable and either reproduces known drift or ver
   const outputs = [...markdown.matchAll(/^```text\r?\n([\s\S]*?)^```/gm)];
   assert.equal(outputs.length, 1);
   assert.equal(outputs[0][1], expectedOutput);
-  assert.match(markdown, /npm install https:\/\/github\.com\/diggerhq\/opencomputer-example-quickstart-check\/releases\/download\/sdk-v2\.0\.0\/parceldesk-sdk-2\.0\.0\.tgz/);
+  // Forks may host the identical SDK release under their own GitHub repository.
+  // Keep the fixture version and asset fixed while allowing that ownership change.
+  assert.match(markdown, /^npm install https:\/\/github\.com\/[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_.-]+\/releases\/download\/sdk-v2\.0\.0\/parceldesk-sdk-2\.0\.0\.tgz\s*$/m);
 
   const script = path.join(project, "quickstart.mjs");
   await writeFile(script, snippets[0][1]);

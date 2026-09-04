@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findFix, proposeFix, type Request } from "../opencomputer/agents/quickstart-check/tools/github-api.js";
+import { base, branch, findFix, proposeFix, repository, type Request } from "../opencomputer/agents/quickstart-check/tools/github-api.js";
 
-const repo = "/repos/diggerhq/opencomputer-example-quickstart-check";
-const pulls = `${repo}/pulls?state=open&base=main&head=diggerhq%3Afix%2Fquickstart&per_page=1`;
+const repo = `/repos/${repository}`;
+const owner = repository.split("/")[0];
+const pulls = `${repo}/pulls?state=open&base=${base}&head=${encodeURIComponent(`${owner}:${branch}`)}&per_page=1`;
 const baseSha = "a".repeat(40);
 const treeSha = "b".repeat(40);
 const blobSha = "c".repeat(40);
@@ -16,7 +17,7 @@ const input = {
   beforeOutput: "Exit 1\nTypeError: orders.map is not a function\nQUICKSTART FAILED",
   afterOutput: "Exit 0\nord_1042: Ada Lovelace ($49.00)\nord_1043: Grace Hopper ($125.00)\nQUICKSTART PASSED — output matches the guide.",
 };
-const pull = { number: 7, html_url: "https://github.com/diggerhq/opencomputer-example-quickstart-check/pull/7" };
+const pull = { number: 7, html_url: `https://github.com/${repository}/pull/7` };
 type Step = { method: "GET" | "POST"; path: string; status: number; json: unknown; inspect?: (body: Record<string, unknown> | undefined) => void };
 
 function fake(steps: Step[]) {
@@ -33,9 +34,9 @@ function fake(steps: Step[]) {
 }
 
 const empty: Step = { method: "GET", path: pulls, status: 200, json: [] };
-const main: Step = { method: "GET", path: `${repo}/git/ref/heads/main`, status: 200, json: { object: { sha: baseSha } } };
+const main: Step = { method: "GET", path: `${repo}/git/ref/heads/${base}`, status: 200, json: { object: { sha: baseSha } } };
 const existing: Step = { method: "GET", path: pulls, status: 200, json: [pull] };
-const ref: Step = { method: "GET", path: `${repo}/git/ref/heads/fix/quickstart`, status: 200, json: { object: { sha: commitSha } } };
+const ref: Step = { method: "GET", path: `${repo}/git/ref/heads/${branch}`, status: 200, json: { object: { sha: commitSha } } };
 const creation: Step[] = [
   empty, main,
   { ...ref, status: 404, json: { message: "Not Found" } },
@@ -51,12 +52,12 @@ const creation: Step[] = [
     assert.equal(body?.tree, nextTreeSha);
   } },
   { method: "POST", path: `${repo}/git/refs`, status: 201, json: { object: { sha: commitSha } }, inspect: body => {
-    assert.deepEqual(body, { ref: "refs/heads/fix/quickstart", sha: commitSha });
+    assert.deepEqual(body, { ref: `refs/heads/${branch}`, sha: commitSha });
   } },
 ];
 const publish: Step = { method: "POST", path: `${repo}/pulls`, status: 201, json: pull, inspect: body => {
-  assert.equal(body?.head, "fix/quickstart");
-  assert.equal(body?.base, "main");
+  assert.equal(body?.head, branch);
+  assert.equal(body?.base, base);
   assert.match(String(body?.body), /deliberately constructed example fixture/);
   assert.ok(String(body?.body).includes(input.beforeOutput.split("\n").map(line => `    ${line}`).join("\n")));
   assert.ok(String(body?.body).includes("QUICKSTART PASSED"));
